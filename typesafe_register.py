@@ -20,12 +20,7 @@ from pathlib import Path
 
 import requests
 
-TEMPMAIL_BASE_URL = ""
-TEMPMAIL_ADMIN_TOKEN = ""
-TEMPMAIL_MODE = "single"          
-TEMPMAIL_DOMAIN = ""              
-TEMPMAIL_DOMAIN_ID = None         
-TEMPMAIL_ADDRESS_PREFIX = ""      
+TEMP_EMAIL_API_KEY = os.getenv("TEMP_EMAIL_API_KEY", "mk_0Ppu6Mf6OHUJNVa7oF9lDt92QR8p5tgt")
 
 CONSOLE_BASE_URL = "https://console.typesafe.ai"
 CONSOLE_DEPLOYMENT_ID = "cc6f6dca06537cc04123caaaf50ca5a76d506a92"   
@@ -35,11 +30,11 @@ PROXY_POOL = [
 ]                                
 
 API_KEY_NAME = "1111"
-ACCOUNT_COUNT = 512              
-CONCURRENCY = 256                  
-MAX_RETRIES_PER_ACCOUNT = 2       
-MAIL_POLL_INTERVAL_SECONDS = 0.05  
-MAIL_POLL_MAX_WAIT_SECONDS = 15  
+ACCOUNT_COUNT = int(os.getenv("ACCOUNT_COUNT", "1"))
+CONCURRENCY = int(os.getenv("CONCURRENCY", "1"))
+MAX_RETRIES_PER_ACCOUNT = 1
+MAIL_POLL_INTERVAL_SECONDS = 2
+MAIL_POLL_MAX_WAIT_SECONDS = 30  
 REQUEST_TIMEOUT = 30
 TLS_ECDH_CURVE = "prime256v1"    
 OUTPUT_JSON_PATH = str(Path(__file__).resolve().parent / "accounts.json")
@@ -110,47 +105,42 @@ def build_session(proxy=None):
 
 
 def tm_headers():
-    return {"Authorization": f"Bearer {TEMPMAIL_ADMIN_TOKEN}", "Content-Type": "application/json", "accept": "*/*"}
+    return {"X-API-Key": TEMP_EMAIL_API_KEY, "Content-Type": "application/json", "accept": "application/json"}
 
 
 def create_mailbox(s):
-    payload = {"mode": TEMPMAIL_MODE}
-    if TEMPMAIL_DOMAIN:
-        payload["domain"] = TEMPMAIL_DOMAIN
-    if TEMPMAIL_DOMAIN_ID is not None:
-        payload["domain_id"] = TEMPMAIL_DOMAIN_ID
-    if TEMPMAIL_ADDRESS_PREFIX:
-        suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
-        payload["address"] = TEMPMAIL_ADDRESS_PREFIX + suffix
-    r = s.post(f"{TEMPMAIL_BASE_URL}/api/mailboxes", headers=tm_headers(), json=payload, timeout=REQUEST_TIMEOUT)
+    prefix = "ts" + uuid.uuid4().hex[:6]
+    payload = {"name": prefix, "expiryTime": 3600000, "domain": "chat-tempmail.com"}
+    r = s.post("https://chat-tempmail.com/api/emails/generate", headers=tm_headers(), json=payload, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
-    return r.json()["mailbox"]
-
-
-def tm_get(s, path):
-    r = s.get(f"{TEMPMAIL_BASE_URL}{path}", headers=tm_headers(), timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    return r.json()
+    data = r.json()
+    return {"id": data["id"], "full_address": data["email"]}
 
 
 def wait_magic_link(s, mailbox_id, after_iso):
     deadline = time.time() + MAIL_POLL_MAX_WAIT_SECONDS
     while True:
-        mails = sorted(tm_get(s, f"/api/mailboxes/{mailbox_id}/emails")["data"], key=lambda m: m["received_at"], reverse=True)
+        r = s.get(f"https://chat-tempmail.com/api/emails/{mailbox_id}", headers=tm_headers(), timeout=REQUEST_TIMEOUT)
+        r.raise_for_status()
+        mails = r.json().get("messages", [])
         for item in mails:
-            if after_iso and item["received_at"].replace("Z", "+00:00") <= after_iso:
-                continue
-            tag = (item.get("sender", "") + item.get("subject", "")).lower()
+            tag = (item.get("from_address", "") + item.get("subject", "")).lower()
             if "typesafe" not in tag:
                 continue
-            mail = tm_get(s, f"/api/mailboxes/{mailbox_id}/emails/{item['id']}")["email"]
-            hay = "\n".join([mail.get("body_text") or "", mail.get("body_html") or "", mail.get("raw_message") or ""])
+            r_detail = s.get(f"https://chat-tempmail.com/api/emails/{mailbox_id}/{item['id']}", headers=tm_headers(), timeout=REQUEST_TIMEOUT)
+            r_detail.raise_for_status()
+            mail = r_detail.json().get("message", {})
+            hay = "\n".join([mail.get("content") or "", mail.get("html") or ""])
             m = MAGIC_LINK_RE.search(hay)
             if m:
                 return {
-                    "email_id": mail["id"], "sender": mail.get("sender"), "subject": mail.get("subject"),
-                    "received_at": mail.get("received_at"), "public_token": m.group("public_token"),
-                    "token": m.group("token"), "magic_link": m.group(0),
+                    "email_id": mail.get("id"),
+                    "sender": mail.get("from_address"),
+                    "subject": mail.get("subject"),
+                    "received_at": mail.get("received_at"),
+                    "public_token": m.group("public_token"),
+                    "token": m.group("token"),
+                    "magic_link": m.group(0),
                 }
         if time.time() >= deadline:
             raise TimeoutError(f"等待 magic link 邮件超时（{MAIL_POLL_MAX_WAIT_SECONDS}s）")

@@ -1,0 +1,33 @@
+[
+  {
+    "status": "failed",
+    "slot": 1,
+    "proxy": "direct",
+    "registered_at": "2026-09-23T07:52:18.677822+00:00",
+    "mailbox": {
+      "id": "fd9ecd84-9ef4-45c3-b198-7805a58ccfaa",
+      "full_address": "tsa57dfd@chat-tempmail.com"
+    },
+    "email": "tsa57dfd@chat-tempmail.com",
+    "send_magic_link": {
+      "action_id": "60b7f4c1eb3a672944949261ea1238554534cff596",
+      "form_index": "3",
+      "x_action_redirect": "https://console.typesafe.ai/login?sent=true&email=tsa57dfd%40chat-tempmail.com;push"
+    },
+    "magic_link": {
+      "email_id": "689f6771-0d49-491a-8613-6e87dee72ee6",
+      "sender": "bounces+17391058-7cf1-tsa57dfd=chat-tempmail.com@em5082.typesafe.ai",
+      "subject": "Welcome to TypeSafe — confirm your email",
+      "received_at": 1790149941743,
+      "public_token": "public-token-live-620c0996-4644-4af3-b592-31cb05006523",
+      "token": "GDV1tNzeYc9BFsGDIt2iU2ln_kXbfRguZ6nTi1azDcGm",
+      "magic_link": "https://login.typesafe.ai/v1/magic_links/redirect?public_token=public-token-live-620c0996-4644-4af3-b592-31cb05006523&stytch_token_type=magic_links&token=GDV1tNzeYc9BFsGDIt2iU2ln_kXbfRguZ6nTi1azDcGm"
+    },
+    "error": "HTTPError: 403 Client Error: Forbidden for url: https://console.typesafe.ai/api/auth/callback",
+    "cookies": {},
+    "finished_at": "2026-09-23T07:52:24.033062+00:00",
+    "duration_seconds": 5.36,
+    "attempt": 2,
+    "index": 1
+  }
+]
